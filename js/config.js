@@ -12,7 +12,7 @@ window.FS_CONFIG = {
   /* Endpoint de réception du formulaire (POST multipart/form-data).
      Exemples : Formspree "https://formspree.io/f/xxxxxx", webhook Make/Zapier, ou API du CRM.
      Laisser vide = mode TEST (aucun envoi, succès simulé + log console). */
-  formEndpoint: "",
+  formEndpoint: "https://hook.eu1.make.com/16gl33fdwgwa7knsxgwyt46hidhn7w8o",
 
   /* Photos : limites côté navigateur */
   maxFiles: 10,
