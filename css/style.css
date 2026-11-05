@@ -820,9 +820,8 @@ html { scrollbar-width: thin; scrollbar-color: var(--c-orange) #E9E7E2; }
 
 /* 9/ Dynamique entre les blocs */
 .divider { height: 6px; background: var(--stripes); }
-.js .divider, .js .color-divider { transform: scaleX(0); transform-origin: 0 50%; transition: transform 1.1s cubic-bezier(.7, 0, .2, 1); }
-.js .divider.is-visible, .js .color-divider.is-visible { transform: none; }
-.js .hero .color-divider { transition-delay: .3s; }
+/* Bandes multicolores visibles immédiatement, sans animation d’apparition. */
+.js .divider, .js .color-divider { transform: none; transition: none; }
 
 /* Listes en cascade : le parent ne bouge pas, les éléments arrivent un par un */
 .js .steps.reveal, .js .args.reveal, .js .cars.reveal, .js .faq__list.reveal { opacity: 1; transform: none; }
@@ -879,9 +878,8 @@ html, body { overflow-x: clip; }
 @media (min-width: 1024px) { .curtain { margin-top: -56px; border-radius: calc(var(--r, 1) * 64px) calc(var(--r, 1) * 64px) 0 0; } }
 .curtain .color-divider--top { border-radius: 0; }
 
-/* 3. Bandes de couleurs en mouvement continu */
-.divider, .color-divider { background-size: 50% 100%; background-repeat: repeat-x; animation: stripeFlow 14s linear infinite; }
-@keyframes stripeFlow { from { background-position: 0 0; } to { background-position: 100% 0; } }
+/* 3. Bandes multicolores fixes (les bandeaux de texte restent animés) */
+.divider, .color-divider { background-size: 50% 100%; background-repeat: repeat-x; background-position: 0 0; animation: none; }
 
 /* 4. Contenu des blocs : montée liée au défilement (piloté en JS via --p) */
 .rise { will-change: transform, opacity; }
