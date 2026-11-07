@@ -237,15 +237,36 @@
        ------------------------------------------------------------------ */
     var photos = [];
     var input = $("#photos"), thumbs = $("[data-thumbs]"), zone = $("[data-dropzone]");
-    var maxFiles = CFG.maxFiles || 10, maxBytes = (CFG.maxFileSizeMb || 10) * 1024 * 1024;
+    var maxFiles = CFG.maxFiles || 10;
+    var maxFileBytes = (CFG.maxFileSizeMb || 10) * 1024 * 1024;
+    // Keep space for the other form fields and multipart headers in Make's 5 MiB limit.
+    var maxTotalBytes = 4_500_000;
+    var uploadHint = $(".dropzone__hint", zone);
+    var defaultUploadHint = uploadHint.textContent + " · 4,5 Mo au total";
+    uploadHint.textContent = defaultUploadHint;
+    uploadHint.setAttribute("aria-live", "polite");
 
     function addFiles(list) {
-      Array.prototype.forEach.call(list, function (f) {
-        if (photos.length >= maxFiles || f.size > maxBytes) return;
-        if (!/^image\//.test(f.type) && f.type !== "application/pdf") return;
-        photos.push(f);
-      });
+      var selected = Array.from(list);
+      var totalBytes = photos.concat(selected).reduce(function (sum, file) { return sum + file.size; }, 0);
       input.value = "";
+      if (!selected.length) return;
+
+      if (photos.length + selected.length > maxFiles) {
+        uploadHint.textContent = "Choisissez au maximum " + maxFiles + " fichiers.";
+        return;
+      }
+      if (totalBytes > maxTotalBytes || selected.some(function (file) { return file.size > maxFileBytes; })) {
+        uploadHint.textContent = "Les fichiers n’ont pas été ajoutés. Choisissez des fichiers plus légers (4,5 Mo au total).";
+        return;
+      }
+      if (selected.some(function (file) { return !/^image\//.test(file.type) && file.type !== "application/pdf"; })) {
+        uploadHint.textContent = "Les fichiers n’ont pas été ajoutés. Choisissez des images ou des PDF.";
+        return;
+      }
+
+      photos = photos.concat(selected);
+      uploadHint.textContent = defaultUploadHint;
       render();
     }
     function render() {
@@ -258,7 +279,7 @@
         } else { li.innerHTML = '<span class="thumb__file">PDF</span>'; }
         var del = document.createElement("button"); del.type = "button"; del.innerHTML = "&times;";
         del.setAttribute("aria-label", "Retirer " + f.name);
-        del.addEventListener("click", function () { photos.splice(i, 1); render(); });
+        del.addEventListener("click", function () { photos.splice(i, 1); uploadHint.textContent = defaultUploadHint; render(); });
         li.appendChild(del); thumbs.appendChild(li);
       });
       $(".dropzone__title", zone).textContent = photos.length ? photos.length + " fichier" + (photos.length > 1 ? "s" : "") + " ajouté" + (photos.length > 1 ? "s" : "") + " · en ajouter" : "Ajouter des photos";
