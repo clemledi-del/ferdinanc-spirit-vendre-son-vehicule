@@ -204,20 +204,34 @@
 
       var data = new FormData(form);
       data.delete("photos");
-      photos.forEach(function (f) { data.append("photos", f, f.name); });
+      btn.disabled = true;
 
-      var request = CFG.formEndpoint
-        ? fetch(CFG.formEndpoint, { method: "POST", body: data, headers: { Accept: "application/json" } })
-            .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r; })
-        : new Promise(function (res) { console.info("[FS] Mode TEST — données du formulaire :", Object.fromEntries(data.entries())); setTimeout(res, 900); });
+      var request = Promise.all(photos.map(preparePhoto)).then(function (files) {
+        if (files.length) {
+          var payload = JSON.stringify(files);
+          if (payload.length > 4_700_000) throw new Error("photos-too-large");
+          data.append("vehicle_photos", payload);
+        }
+        if (!CFG.formEndpoint) return;
+        return fetch(CFG.formEndpoint, { method: "POST", body: data, headers: { Accept: "application/json" } })
+          .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); });
+      });
 
       request.then(function () {
         track("Lead", { content_name: brand.value + " " + model.value, content_category: "Estimation vendeur" });
         showSuccess(form.elements.prenom.value.trim());
-      }).catch(function () {
+      }).catch(function (error) {
+        if (error.message === "photos-too-large" || error.message === "photo-format") {
+          errBox.textContent = error.message === "photos-too-large"
+            ? "Les fichiers dépassent la taille d’envoi. Retirez un fichier ou choisissez une version plus légère."
+            : "Une image n’a pas pu être lue. Remplacez-la par un fichier JPEG ou PNG.";
+          errBox.hidden = false;
+          return;
+        }
         errBox.innerHTML = 'Oups, l\'envoi n\'a pas abouti. Réessayez ou appelez-nous au <a href="tel:+33627053439">06 27 05 34 39</a>.';
         errBox.hidden = false;
       }).finally(function () {
+        btn.disabled = false;
         btn.classList.remove("is-loading"); btn.removeAttribute("aria-busy");
       });
     });
@@ -245,6 +259,48 @@
     var defaultUploadHint = uploadHint.textContent + " · 4,5 Mo au total";
     uploadHint.textContent = defaultUploadHint;
     uploadHint.setAttribute("aria-live", "polite");
+
+    function preparePhoto(file) {
+      var isPdf = file.type === "application/pdf";
+      var prepared = isPdf ? Promise.resolve(file) : new Promise(function (resolve, reject) {
+        var image = new Image();
+        var url = URL.createObjectURL(file);
+        image.onerror = function () {
+          URL.revokeObjectURL(url);
+          reject(new Error("photo-format"));
+        };
+        image.onload = function () {
+          URL.revokeObjectURL(url);
+          try {
+            var scale = Math.min(1, 1440 / Math.max(image.naturalWidth, image.naturalHeight));
+            var canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            var context = canvas.getContext("2d");
+            context.fillStyle = "#fff";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(function (blob) {
+              if (blob) resolve(blob);
+              else reject(new Error("photo-format"));
+            }, "image/jpeg", 0.8);
+          } catch (error) {
+            reject(new Error("photo-format"));
+          }
+        };
+        image.src = url;
+      });
+      return prepared.then(function (blob) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onerror = function () { reject(new Error("photo-format")); };
+          reader.onload = function () {
+            resolve({ mime: isPdf ? "application/pdf" : "image/jpeg", data: reader.result.split(",")[1] });
+          };
+          reader.readAsDataURL(blob);
+        });
+      });
+    }
 
     function addFiles(list) {
       var selected = Array.from(list);
