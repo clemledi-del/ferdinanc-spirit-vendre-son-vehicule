@@ -482,28 +482,44 @@
     $$("[data-gallery]").forEach(function (g) {
       var imgs = $$(".car__img", g), bars = $$(".car__bars i", g), cur = 0;
       if (imgs.length < 2) return;
+      var wanted = 0;
       function show(i) {
-        if (i === cur) return; cur = i;
-        imgs.forEach(function (im, k) { im.classList.toggle("is-active", k === i); });
-        bars.forEach(function (b, k) { b.classList.toggle("is-active", k === i); });
+        wanted = i;
+        if (i === cur || !imgs[i].complete || !imgs[i].naturalWidth) return;
+        imgs[cur].classList.remove("is-active");
+        bars[cur].classList.remove("is-active");
+        imgs[i].classList.add("is-active");
+        bars[i].classList.add("is-active");
+        cur = i;
       }
-      /* précharge les photos suivantes dès que la fiche approche */
-      function preload() { imgs.forEach(function (im) { im.loading = "eager"; }); }
+      /* Charge les photos secondaires quand la galerie approche. */
+      imgs.forEach(function (im, index) {
+        im.addEventListener("load", function () {
+          if (wanted === index) show(wanted);
+        }, { once: true });
+      });
+      function preload() {
+        imgs.slice(1).forEach(function (im) {
+          im.loading = "eager";
+          im.srcset = im.dataset.srcset;
+          im.src = im.dataset.src;
+        });
+      }
       if ("IntersectionObserver" in window) {
-        var pre = new IntersectionObserver(function (en) { if (en[0].isIntersecting) { preload(); pre.disconnect(); } }, { rootMargin: "300px" });
+        var pre = new IntersectionObserver(function (en) { if (en[0].isIntersecting) { preload(); pre.disconnect(); } }, { rootMargin: "500px" });
         pre.observe(g);
       } else preload();
 
       if (canHover) {
         g.addEventListener("mousemove", function (e) {
           var r = g.getBoundingClientRect();
-          show(Math.min(imgs.length - 1, Math.floor((e.clientX - r.left) / r.width * imgs.length)));
+          if (r.width) show(Math.max(0, Math.min(imgs.length - 1, Math.floor((e.clientX - r.left) / r.width * imgs.length))));
         });
         g.addEventListener("mouseleave", function () { show(0); });
       } else if ("IntersectionObserver" in window) {
         var timer = null;
         new IntersectionObserver(function (en) {
-          if (en[0].isIntersecting) { if (!timer) timer = setInterval(function () { show((cur + 1) % imgs.length); }, 2200); }
+          if (en[0].isIntersecting) { if (!timer) timer = setInterval(function () { show((wanted + 1) % imgs.length); }, 2200); }
           else { clearInterval(timer); timer = null; show(0); }
         }, { threshold: 0.6 }).observe(g);
       }
@@ -529,12 +545,13 @@
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
     $$("[data-count]").forEach(function (el) {
-      var to = +el.getAttribute("data-count"), t0 = null, dur = 1200;
+      var to = +el.getAttribute("data-count"), t0 = null, dur = 1200, current = 0;
       el.textContent = "0";
       function step(t) {
         if (!t0) t0 = t;
         var k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-        el.textContent = Math.round(to * e);
+        var next = Math.round(to * e);
+        if (next !== current) { el.textContent = next; current = next; }
         if (k < 1) requestAnimationFrame(step);
       }
       setTimeout(function () { requestAnimationFrame(step); }, 400);
@@ -582,50 +599,88 @@
       return { el: m, track: track, dir: +m.getAttribute("data-dir") || -1, x: 0, w: 0, on: false };
     });
     var curtains = $$(".curtain"), heroContent = $(".hero__content");
-    var lastY = window.scrollY, vel = 0, last = performance.now();
+    var lastY = window.scrollY, vel = 0, last = null, frameId = 0;
+    var layoutDirty = true;
+
+    function schedule() {
+      if (!frameId && !document.hidden) frameId = requestAnimationFrame(frame);
+    }
 
     if ("IntersectionObserver" in window) {
       var io = new IntersectionObserver(function (en) {
         en.forEach(function (e) { marquees.forEach(function (m) { if (m.el === e.target) m.on = e.isIntersecting; }); });
+        schedule();
       }, { rootMargin: "100px" });
       marquees.forEach(function (m) { io.observe(m.el); });
     } else marquees.forEach(function (m) { m.on = true; });
 
-    function measure() { marquees.forEach(function (m) { m.w = m.track.scrollWidth / 4; }); }
-    measure(); window.addEventListener("resize", measure);
+    function measure() {
+      marquees.forEach(function (m) { m.w = m.track.scrollWidth / 4; });
+      layoutDirty = true;
+      schedule();
+    }
 
     function frame(t) {
-      var dt = Math.min(64, t - last); last = t;
-      var y = window.scrollY, vh = window.innerHeight;
-      vel += ((y - lastY) - vel) * 0.15; lastY = y;
+      frameId = 0;
+      var dt = last === null ? 0 : Math.min(64, t - last);
+      var y = window.scrollY, delta = y - lastY;
+      var updateLayout = delta !== 0 || layoutDirty;
+      var vh = window.innerHeight;
+      /* Lis les positions avant d'appliquer les transformations. */
+      var tops = updateLayout ? curtains.map(function (c) { return c.getBoundingClientRect().top; }) : [];
+      var desktop = window.innerWidth >= 1024;
+      layoutDirty = false;
+      vel += (delta - vel) * 0.15;
+      lastY = y;
 
-      /* bandeaux : vitesse de base + boost selon le scroll */
+      /* Bandeaux : vitesse de base et accélération au défilement. */
       var boost = Math.min(12, Math.abs(vel) * 0.6);
+      var running = false;
       marquees.forEach(function (m) {
         if (!m.on || !m.w) return;
+        running = true;
         m.x += m.dir * (0.045 + boost * 0.02) * dt * (vel < -0.5 ? -1 : 1);
-        if (m.x <= -m.w) m.x += m.w; if (m.x > 0) m.x -= m.w;
+        if (m.x <= -m.w) m.x += m.w;
+        if (m.x > 0) m.x -= m.w;
         m.track.style.transform = "translate3d(" + m.x.toFixed(1) + "px,0,0) skewX(" + Math.max(-8, Math.min(8, -vel * 0.25)).toFixed(2) + "deg)";
       });
 
-      /* rideaux */
-      curtains.forEach(function (c) {
-        var top = c.getBoundingClientRect().top;
-        if (top > vh || top < -vh) return;
-        var p = Math.max(0, Math.min(1, (vh - top) / (vh * 0.75)));
-        c.style.setProperty("--r", (1 - p).toFixed(3));
-        c.style.transform = p < 1 ? "scale(" + (0.94 + 0.06 * p).toFixed(4) + ")" : "";
-      });
+      if (updateLayout) {
+        curtains.forEach(function (c, i) {
+          var top = tops[i];
+          if (top > vh || top < -vh) return;
+          var p = Math.max(0, Math.min(1, (vh - top) / (vh * 0.75)));
+          c.style.setProperty("--r", (1 - p).toFixed(3));
+          c.style.transform = p < 1 ? "scale(" + (0.94 + 0.06 * p).toFixed(4) + ")" : "";
+        });
 
-      /* hero : le contenu s'efface en remontant */
-      if (heroContent && window.innerWidth >= 1024 && y < vh) {
-        var k = y / vh;
-        heroContent.style.transform = "translate3d(0," + (-k * 80).toFixed(1) + "px,0)";
-        heroContent.style.opacity = (1 - k * 0.9).toFixed(3);
+        if (heroContent && desktop && y < vh) {
+          var k = y / vh;
+          heroContent.style.transform = "translate3d(0," + (-k * 80).toFixed(1) + "px,0)";
+          heroContent.style.opacity = (1 - k * 0.9).toFixed(3);
+        } else if (heroContent && !desktop) {
+          heroContent.style.removeProperty("transform");
+          heroContent.style.removeProperty("opacity");
+        }
       }
-      requestAnimationFrame(frame);
+      last = running ? t : null;
+      if (running) schedule();
     }
-    requestAnimationFrame(frame);
+
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", measure);
+    if (document.fonts) document.fonts.ready.then(measure);
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) {
+        cancelAnimationFrame(frameId);
+        frameId = 0;
+        last = null;
+      } else {
+        layoutDirty = true;
+        schedule();
+      }
+    });
+    measure();
   }
 
   /* ------------------------------------------------------------------ */
