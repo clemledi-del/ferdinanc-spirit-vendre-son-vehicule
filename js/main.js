@@ -228,7 +228,7 @@
           errBox.hidden = false;
           return;
         }
-        errBox.innerHTML = 'Oups, l\'envoi n\'a pas abouti. Réessayez ou appelez-nous au <a href="tel:+33627053439">06 27 05 34 39</a>.';
+        errBox.innerHTML = 'Oups, l\'envoi n\'a pas abouti. Réessayez ou appelez-nous au <a href="tel:+33659678703">06 59 67 87 03</a>.';
         errBox.hidden = false;
       }).finally(function () {
         btn.disabled = false;
