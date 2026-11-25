@@ -3,7 +3,7 @@
    ========================================================================== */
 window.FS_CONFIG = {
   /* ID du Pixel Meta (Gestionnaire d'évènements > Sources de données) */
-  metaPixelId: "VOTRE_PIXEL_ID",
+  metaPixelId: "1138159738642050",
 
   /* Le Pixel n'est chargé qu'après acceptation du bandeau cookies (CNIL).
      Passer à false uniquement si un CMP (Axeptio, Didomi…) gère déjà le consentement. */
