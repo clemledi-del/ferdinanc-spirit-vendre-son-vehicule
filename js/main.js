@@ -206,7 +206,7 @@
       data.delete("photos");
       btn.disabled = true;
 
-      var request = Promise.all(photos.map(preparePhoto)).then(function (files) {
+      var request = Promise.resolve([]).then(function (files) {
         if (files.length) {
           var payload = JSON.stringify(files);
           if (payload.length > 4_700_000) throw new Error("photos-too-large");
@@ -246,104 +246,7 @@
       updateSticky();
     }
 
-    /* ------------------------------------------------------------------
-       4. PHOTOS : aperçus, suppression, drag & drop
-       ------------------------------------------------------------------ */
-    var photos = [];
-    var input = $("#photos"), thumbs = $("[data-thumbs]"), zone = $("[data-dropzone]");
-    var maxFiles = CFG.maxFiles || 10;
-    var maxFileBytes = (CFG.maxFileSizeMb || 10) * 1024 * 1024;
-    // Keep space for the other form fields and multipart headers in Make's 5 MiB limit.
-    var maxTotalBytes = 4_500_000;
-    var uploadHint = $(".dropzone__hint", zone);
-    var defaultUploadHint = uploadHint.textContent + " · 4,5 Mo au total";
-    uploadHint.textContent = defaultUploadHint;
-    uploadHint.setAttribute("aria-live", "polite");
 
-    function preparePhoto(file) {
-      var isPdf = file.type === "application/pdf";
-      var prepared = isPdf ? Promise.resolve(file) : new Promise(function (resolve, reject) {
-        var image = new Image();
-        var url = URL.createObjectURL(file);
-        image.onerror = function () {
-          URL.revokeObjectURL(url);
-          reject(new Error("photo-format"));
-        };
-        image.onload = function () {
-          URL.revokeObjectURL(url);
-          try {
-            var scale = Math.min(1, 1440 / Math.max(image.naturalWidth, image.naturalHeight));
-            var canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-            var context = canvas.getContext("2d");
-            context.fillStyle = "#fff";
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(image, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(function (blob) {
-              if (blob) resolve(blob);
-              else reject(new Error("photo-format"));
-            }, "image/jpeg", 0.8);
-          } catch (error) {
-            reject(new Error("photo-format"));
-          }
-        };
-        image.src = url;
-      });
-      return prepared.then(function (blob) {
-        return new Promise(function (resolve, reject) {
-          var reader = new FileReader();
-          reader.onerror = function () { reject(new Error("photo-format")); };
-          reader.onload = function () {
-            resolve({ mime: isPdf ? "application/pdf" : "image/jpeg", data: reader.result.split(",")[1] });
-          };
-          reader.readAsDataURL(blob);
-        });
-      });
-    }
-
-    function addFiles(list) {
-      var selected = Array.from(list);
-      var totalBytes = photos.concat(selected).reduce(function (sum, file) { return sum + file.size; }, 0);
-      input.value = "";
-      if (!selected.length) return;
-
-      if (photos.length + selected.length > maxFiles) {
-        uploadHint.textContent = "Choisissez au maximum " + maxFiles + " fichiers.";
-        return;
-      }
-      if (totalBytes > maxTotalBytes || selected.some(function (file) { return file.size > maxFileBytes; })) {
-        uploadHint.textContent = "Les fichiers n’ont pas été ajoutés. Choisissez des fichiers plus légers (4,5 Mo au total).";
-        return;
-      }
-      if (selected.some(function (file) { return !/^image\//.test(file.type) && file.type !== "application/pdf"; })) {
-        uploadHint.textContent = "Les fichiers n’ont pas été ajoutés. Choisissez des images ou des PDF.";
-        return;
-      }
-
-      photos = photos.concat(selected);
-      uploadHint.textContent = defaultUploadHint;
-      render();
-    }
-    function render() {
-      thumbs.innerHTML = "";
-      photos.forEach(function (f, i) {
-        var li = document.createElement("li");
-        if (/^image\//.test(f.type)) {
-          var img = document.createElement("img"); img.alt = ""; img.src = URL.createObjectURL(f);
-          img.onload = function () { URL.revokeObjectURL(img.src); }; li.appendChild(img);
-        } else { li.innerHTML = '<span class="thumb__file">PDF</span>'; }
-        var del = document.createElement("button"); del.type = "button"; del.innerHTML = "&times;";
-        del.setAttribute("aria-label", "Retirer " + f.name);
-        del.addEventListener("click", function () { photos.splice(i, 1); uploadHint.textContent = defaultUploadHint; render(); });
-        li.appendChild(del); thumbs.appendChild(li);
-      });
-      $(".dropzone__title", zone).textContent = photos.length ? photos.length + " fichier" + (photos.length > 1 ? "s" : "") + " ajouté" + (photos.length > 1 ? "s" : "") + " · en ajouter" : "Ajouter des photos";
-    }
-    input.addEventListener("change", function () { addFiles(input.files); });
-    ["dragenter", "dragover"].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.add("is-over"); }); });
-    ["dragleave", "drop"].forEach(function (t) { zone.addEventListener(t, function (e) { e.preventDefault(); zone.classList.remove("is-over"); }); });
-    zone.addEventListener("drop", function (e) { addFiles(e.dataTransfer.files); });
   }
 
   /* ------------------------------------------------------------------
