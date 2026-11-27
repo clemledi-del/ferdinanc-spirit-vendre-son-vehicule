@@ -11,8 +11,12 @@ window.FS_CONFIG = {
 
   /* Endpoint de réception du formulaire (POST multipart/form-data).
      Exemples : Formspree "https://formspree.io/f/xxxxxx", webhook Make/Zapier, ou API du CRM.
-     Laisser vide = mode TEST (aucun envoi, succès simulé + log console). */
+     Cet envoi reste indépendant du stockage Supabase. */
   formEndpoint: "https://hook.eu1.make.com/16gl33fdwgwa7knsxgwyt46hidhn7w8o",
+
+  /* Supabase : paramètres publics, aucune clé de service côté navigateur. */
+  supabaseUrl: "https://jfewrvbxulnjcqmrmjch.supabase.co",
+  supabaseKey: "sb_publishable_B0n_bBDl56Xg7KcjT9O5-g_wocn0gB3",
 
   /* Photos : limites côté navigateur */
   maxFiles: 10,
@@ -29,3 +33,4 @@ window.FS_CONFIG = {
   /* Modèles non repris (Porsche) — affiche un message informatif */
   excludedModels: ["cayenne", "panamera", "macan", "taycan"]
 };
+

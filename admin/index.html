@@ -20,7 +20,7 @@
     .admin{display:none;padding:28px}
     .top{display:flex;gap:20px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
     .top h1{margin:0}.meta{color:var(--muted);font-size:13px;margin-top:5px}
-    .actions{display:flex;gap:10px;align-items:center}.actions input{width:280px}
+    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap} button:disabled{opacity:.5;cursor:wait}.actions input{width:280px}
     .table-wrap{overflow:auto;background:#fff;border:1px solid var(--line)}
     table{width:100%;border-collapse:collapse;min-width:1450px}
     th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:13px;vertical-align:top}
@@ -38,9 +38,9 @@
       <p class="sub">Accès aux soumissions du formulaire d'estimation.</p>
       <form id="loginForm">
         <label for="password">Mot de passe</label>
-        <input id="password" type="password" autocomplete="current-password" autofocus>
+        <input id="password" type="password" autocomplete="current-password" autofocus required>
         <button type="submit">Accéder</button>
-        <div class="error" id="error"></div>
+        <div class="error" id="error" role="alert"></div>
       </form>
     </div>
   </section>
@@ -49,95 +49,153 @@
     <div class="top">
       <div>
         <h1>Soumissions du formulaire</h1>
-        <div class="meta" id="meta"></div>
+        <div class="meta" id="meta" role="status"></div>
       </div>
       <div class="actions">
-        <input id="search" type="search" placeholder="Rechercher nom, modèle, email…">
+        <input id="search" type="search" placeholder="Rechercher nom, modèle, email…" aria-label="Rechercher une soumission">
+        <button id="refresh" type="button">Actualiser</button>
         <button id="logout" type="button">Déconnexion</button>
       </div>
     </div>
+    <p id="loadError" class="error" role="alert"></p>
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>Date</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Téléphone</th><th>CP</th>
           <th>Marque</th><th>Modèle</th><th>Version</th><th>Année</th><th>Km</th>
-          <th>Statut</th><th>Tri</th><th>Commercial</th><th>CRM</th>
+          <th>UTM source</th><th>UTM campaign</th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
   </main>
 
+  <script src="../js/config.js"></script>
   <script>
-    const ENCRYPTED = {
-      salt:"/1/vdhS1I6MtQnhMfe5QIQ==",
-      iv:"89lKQ9iLtoUUVyWF",
-      data:"JQnDGeqKggrYCwm9FtYrO00coeRbNZcUkpPRGSYlTNhteYeCWecBy7XsrW0jRfwsD0XCIRuxz2NY176MwSVUEZxn7DhAndJpgrP0Wssjjr1+/Sql19AO791Nk61U3i8f76LYkpn/orCOQTiJsXqzJicGR4Sy0j4kSwsIm7o777fz26ouXiDq8YglsUJf6O+tIl4mcN8woR+yJTOVo4u5zMm6Ea4gKF+Elxuq7giZVohVf41L4rFahrvEZuGC/YsAwR04i/aWWEHRBAEl4EAr3brqm9RhDLns03xkO0KOMFfFqX0Y2f5rQJZ8M5RPng8XwZs7YV5kxo4aBwK3xsxX2zle4sobd5/Cn1LOP4RBpbmnsoBGri8MJKHxjx3sZ3I3Nmk1jmg8vbzigKkjBzg7Zqw0paoXVddu7Ed6n6GzEenOzq0D4rbgs5MzJUhc9WNs7jDcqtx5BYno6q5BFYUXQDoL05Uw5O31xAJS5A17SWTTEPn8uXNpEV86g7Nq7+DEu3WLEZoOwF5WyJvUXFVf2rk27PMqGeX9hmOYo0Z/4KQej/EQj2lAxm1dm9pCu8lgkxw/bCAVdZQOwczdC1RO1j+4geUCa8DpMjHGUp5gT30jSdezwzeBA65G8FbrKtsSZYB1R5lZyMdDffNuM/Q5k/9bhHj37AjgiTxqtu31IWBKCfIXXzN+XTlSZXjoolSY4yckAxwfHFgbsvLrLNRrv3h5AqrnJr46E7TyJnZwi0jikHQ5mL5YRr6QDERqhRRg4W3VHcwl+ocg+6JmRi3FEQjJh/qhdmavZmA2v1kRRYnDIsl6yNUYu2Z5mGjJ40CqDI62aQ3ekqsNO3mF8/Npu7+NY+xFginQ75hJeM++5WxLR+1zut0UaJ4Qi42kcHXSjCv5+xWAziufQNjwri4EJ3LHSvpQOCdISEhBR6cHfGxVx1yWknUFmX0dtUGVmSRdPe9Nj0H1FPoPaYRHPFDrI48ng4YEjQTJSGWPdQ2fqGR18F649D6jekH1+P+fDp7V+1GZpmnvpApJg6wiLXgzhUS9WljPy2293lkDh7lHE9uInUldLxuKbzqx28lgElfZ92vFtXb64pdAHRINbdAJ32ZOG/1Q7mpYlOSUSfXQNUlOHdFoNCrh1TRoVKwOmIeK6KqBGywLAXkTjGW+3IwvHZnDD8vy9mtobnIo7PVvG+h7OPJruXSrx7h5KlZ1lk9udjqfw9QFR/1FhvvQ0y4bZvIbaa1sUmOrpci29iYIVQLQ8NfequZsrZn6QCjm0fIQYn+r0kOj27m34EeXid8PGLSiNoNVDhlXPylqbmF80NsGkCTxiszLHdE3aPmWsjlJrE4QGAmz5Qm89vn4+T5dqqWPGqtR6awBcrxEigvKBpq3rB6IjrqznuC6uiNRJvg7eLFcmjw/gLXFiT3+CHCTCRpKeUi3tCjDi96GmRUcadEZoULZjyTIzvGlfmUwryQbwIpIjCNzV5qkx8KRo87IMAlvD/Ws/Ph4BCBvJHYcJssjW9qhCU+SViodpydjl5oes2lI2Kvt02taGEMcXP03d8VuShB2kXO2IU4S7ZrvrndBzTAuYXsoeSHCRCOYpiCbvlycKJ/YqFR0im557pN4NjQOlO3xgVDsYtfpQnr0p0utBRQooldVlkGTSdJJP4y7VFqAqlbbWb0nwyO1ATNLorEAaxA2zG09nekRq1T2W5Kxd4PDJ7CKDFpnD3EuNEQPnX8C/6+JEmeHgOZEqLwdaA/eWrZ1PbIbKJH2cuk5i2wWXoNcQiNEzLDyewujKXC8Xgy1oSPLUweLKl0Ih7n5ZMNqEkhRIw5DFLUo4gGteAS7TruAZcpocXvnNocr+0OAByegwzG4x3jdEuBjyIz9M00vY8lMmWkWzY9WOgb+QWxmmFgS+huL4xEazM6xdydyXaT+SehJMBTp6q84UIfdSLalBEgNbLL5bHO5PzLDL3P6BaHXPI1MKlKSI33QOOr0t8S9Q6DQiTyLu+/7z0CKzT4QpblVVhi5s2hDYBLeUgsxa7VRsuCt53kWcllXRunFehnrhypz8RwkwTnnOqrFNqcZAZVKsEK+tcPla1asddAAZxEWswe6Xr/YlveT0zs4hCPO1UqJpieaNUOibUJEmOxy6/KtedrhyzDo22rVgNzgPO3ZS1JqEoYQdcqs6a+2nyD8OVm4e1Qa5doqXhLkg8Vjy3CjWepQTfeFcuj3Pj+hLIAQSoWKIu/XlraivC+SzeoMRC2KLSfh1uWCc3asGdLlOAyDcik33DWbHvBHWnLY0BNaGLikLMxNbMwDSSs7e6RcrCjg5wyIWDAOtPUqBimzPsAUTCVnIzntmell+37cbC44hNqH7wxGXgKm/lQvq0M1f39p+HbsaXaGnT1OYMEf/WtAu6eAslJYxgbj5xe7XPvVQ7lAFJ2vXxifcJPNroLSE07Y2Jpr37hmEjwVJYfJZt8XTb1VrJilAHHvjkRGK0/qL3LWXIoe/9K8oDktWKSoT8FZftOqc+r9jwWWpmOQLjMp+2DtiyHtfsh3fmZHu7i3VTpqlNwDYlywjLnwSYAfqrfspz7eZcB38QaaCPPn7nqB1GdGA2ygzIHNz4ayiUspqfXwDFltQN5MUNGO3/XEoEZuoDCj3TBg8VEdBww6xpM0fvIuotnM9I/BLhuBn1VZiBw2kep5vlGPFNikL60d+ExhDlTuYRgPXx8UpLIMnUO/BzaDZcxh9VkEns1HF5NkxErUD6H4tR8mPxgablGDlMCKTxhierZgpIOdt6qIv4mRYUb1qRLLYfSe1IPTyn6Be0NiAXoHTenjaC3VY6ZhFmnNitR6kNX6hSnD0sFbHsZ/N6xzt7XmdqEbpxHhg0AC7R8Hkpq2fHjQBql3SjZgRRyUheHR7YYw5V1LpRrnkO/m1dCpn5tJiukGBa2dqZHc608sDD2TQdae6qIG2OUAeCZNHhw+OYc8/X9AYrDUd2KGLBILgUfW/CX82Fg53N5W/ytLcxBJKvnMYZCqp6OKsZ7pp+yIiwne7DICLA73xh/X"
-    };
-
-    let state = null;
+    "use strict";
+    const CFG = window.FS_CONFIG || {};
     const $ = s => document.querySelector(s);
-    const td = v => v === null || v === undefined || v === "" ? '<span class="empty">—</span>' : String(v);
+    let rows = [], password = "", updatedAt = null, loading = false, generation = 0;
+    // Le mot de passe n'est conservé qu'en mémoire et n'est envoyé qu'à la RPC.
+    const fields = ["created_at", "prenom", "nom", "email", "telephone", "code_postal",
+      "marque", "modele", "version", "annee", "kilometrage", "utm_source", "utm_campaign"];
 
-    function b64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
-    async function decrypt(password){
-      const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-      const key = await crypto.subtle.deriveKey(
-        {name:"PBKDF2",salt:b64(ENCRYPTED.salt),iterations:120000,hash:"SHA-256"},
-        keyMaterial,{name:"AES-GCM",length:256},false,["decrypt"]
-      );
-      const plain = await crypto.subtle.decrypt({name:"AES-GCM",iv:b64(ENCRYPTED.iv)}, key, b64(ENCRYPTED.data));
-      return JSON.parse(new TextDecoder().decode(plain));
-    }
-
-    function formatDate(v){
-      if(!v) return "—";
-      const d = new Date(v.replace(" ","T"));
-      return isNaN(d) ? v : d.toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"});
-    }
-    function esc(v){
-      return String(v ?? "").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-    }
-    function render(filter=""){
-      const q = filter.trim().toLowerCase();
-      const rows = state.leads.filter(x => !q || Object.values(x).join(" ").toLowerCase().includes(q));
-      $("#rows").innerHTML = rows.map(x => `
-        <tr>
-          <td class="nowrap">${esc(formatDate(x.date_entree))}</td>
-          <td>${td(esc(x.prenom))}</td><td>${td(esc(x.nom))}</td><td>${td(esc(x.email))}</td>
-          <td class="nowrap">${td(esc(x.telephone))}</td><td>${td(esc(x.code_postal))}</td>
-          <td>${td(esc(x.marque))}</td><td>${td(esc(x.modele))}</td><td>${td(esc(x.version))}</td>
-          <td>${td(esc(x.annee))}</td><td>${x.kilometrage ? Number(x.kilometrage).toLocaleString("fr-FR") : '<span class="empty">—</span>'}</td>
-          <td><span class="pill">${td(esc(x.statut))}</span></td><td>${td(esc(x.tri))}</td><td>${td(esc(x.commercial))}</td>
-          <td><a class="crm" target="_blank" rel="noopener" href="${esc(x.url)}">Ouvrir</a></td>
-        </tr>`).join("");
-      $("#meta").textContent = rows.length + " soumission" + (rows.length>1?"s":"") + " · snapshot CRM du 27/11/2026";
+    function formatDate(value) {
+      if (!value) return "—";
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? String(value) : date.toLocaleString("fr-FR", {
+        dateStyle: "short", timeStyle: "short", timeZone: "Europe/Paris"
+      });
     }
 
-    $("#loginForm").addEventListener("submit", async e => {
-      e.preventDefault();
-      $("#error").textContent = "";
-      try{
-        state = await decrypt($("#password").value);
-        sessionStorage.setItem("fs_admin_pwd", $("#password").value);
-        $("#login").style.display="none";
-        $("#admin").style.display="block";
-        render();
-      }catch(err){
-        $("#error").textContent = "Mot de passe incorrect.";
+    function render() {
+      const query = $("#search").value.trim().toLocaleLowerCase("fr-FR");
+      const filtered = rows.filter(row => !query || fields.some(key =>
+        String(row[key] ?? "").toLocaleLowerCase("fr-FR").includes(query)));
+      const fragment = document.createDocumentFragment();
+      filtered.forEach(row => {
+        const tr = document.createElement("tr");
+        fields.forEach(key => {
+          const cell = document.createElement("td");
+          const value = row[key];
+          cell.textContent = key === "created_at" ? formatDate(value)
+            : key === "kilometrage" && value !== null && value !== undefined && value !== ""
+              ? Number(value).toLocaleString("fr-FR")
+              : String(value ?? "") || "—";
+          tr.appendChild(cell);
+        });
+        fragment.appendChild(tr);
+      });
+      if (!filtered.length) {
+        const tr = document.createElement("tr"), cell = document.createElement("td");
+        cell.colSpan = fields.length;
+        cell.textContent = query ? "Aucun résultat." : "Aucune soumission pour le moment.";
+        tr.appendChild(cell); fragment.appendChild(tr);
       }
-    });
-    $("#search").addEventListener("input",e=>render(e.target.value));
-    $("#logout").addEventListener("click",()=>{sessionStorage.removeItem("fs_admin_pwd");location.reload();});
+      $("#rows").replaceChildren(fragment);
+      $("#meta").textContent = filtered.length + " / " + rows.length + " soumission(s) · Mise à jour : "
+        + formatDate(updatedAt) + " · Actualisation automatique toutes les 15 s";
+    }
 
-    (async()=>{
-      const p=sessionStorage.getItem("fs_admin_pwd");
-      if(!p)return;
-      try{
-        state=await decrypt(p);
-        $("#login").style.display="none";$("#admin").style.display="block";render();
-      }catch(e){sessionStorage.removeItem("fs_admin_pwd");}
-    })();
+    async function listSubmissions(candidate) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const all = [];
+        // Pagination pour ne pas limiter silencieusement le tableau aux 1 000 premières lignes.
+        for (let offset = 0; ; ) {
+          const response = await fetch(CFG.supabaseUrl.replace(/\/$/, "")
+            + "/rest/v1/rpc/admin_list_submissions?limit=1000&offset=" + offset, {
+            method: "POST",
+            headers: { apikey: CFG.supabaseKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ p_password: candidate }),
+            signal: controller.signal,
+            cache: "no-store"
+          });
+          if (!response.ok) {
+            if (response.status === 400 || response.status === 401 || response.status === 403) {
+              throw new Error("Accès refusé. Vérifiez le mot de passe.");
+            }
+            throw new Error("Lecture Supabase impossible (HTTP " + response.status + ").");
+          }
+          const batch = await response.json();
+          if (!Array.isArray(batch)) throw new Error("Réponse Supabase inattendue.");
+          all.push(...batch);
+          const range = response.headers.get("content-range");
+          const total = range && range.split("/")[1];
+          offset += batch.length;
+          if (!batch.length || (total && total !== "*" && offset >= Number(total))) break;
+        }
+        return all;
+      } finally { clearTimeout(timer); }
+    }
+
+    async function reload(candidate, login = false) {
+      if (loading) return;
+      loading = true;
+      const token = generation;
+      $("#refresh").disabled = true;
+      $("#loginForm button").disabled = true;
+      $("#error").textContent = "";
+      $("#loadError").textContent = "";
+      try {
+        const result = await listSubmissions(candidate);
+        if (token !== generation) return;
+        rows = result; updatedAt = new Date();
+        password = candidate;
+        $("#password").value = "";
+        $("#login").style.display = "none";
+        $("#admin").style.display = "block";
+        render();
+      } catch (error) {
+        if (token !== generation) return;
+        $(login ? "#error" : "#loadError").textContent = error.name === "AbortError"
+          ? "Le serveur met trop de temps à répondre. Réessayez."
+          : error instanceof TypeError ? "Connexion impossible. Vérifiez votre connexion et réessayez."
+          : error.message;
+      } finally {
+        loading = false;
+        $("#refresh").disabled = false;
+        $("#loginForm button").disabled = false;
+      }
+    }
+
+    $("#loginForm").addEventListener("submit", event => {
+      event.preventDefault();
+      reload($("#password").value, true);
+    });
+    $("#search").addEventListener("input", render);
+    $("#refresh").addEventListener("click", () => reload(password));
+    $("#logout").addEventListener("click", () => {
+      generation++;
+      password = ""; rows = []; updatedAt = null;
+      $("#rows").replaceChildren(); $("#search").value = "";
+      $("#loadError").textContent = ""; $("#meta").textContent = "";
+      $("#admin").style.display = "none"; $("#login").style.display = "grid";
+      $("#password").value = ""; $("#password").focus();
+    });
+    setInterval(() => { if (password && !document.hidden) reload(password); }, 15000);
   </script>
 </body>
 </html>
+

@@ -138,13 +138,60 @@
     return !firstBad;
   }
 
+  function submissionPayload(data) {
+    var payload = {};
+    ["prenom", "nom", "email", "telephone", "code_postal", "marque", "modele", "version",
+      "utm_source", "utm_medium", "utm_campaign", "utm_content", "fbclid", "page"].forEach(function (key) {
+      payload[key] = String(data.get(key) || "").trim();
+    });
+    var year = String(data.get("annee") || "").trim();
+    var mileage = String(data.get("kilometrage") || "").replace(/\D/g, "");
+    payload.annee = year ? parseInt(year, 10) : null;
+    payload.kilometrage = mileage ? parseInt(mileage, 10) : null;
+    payload.photos = [];
+    return payload;
+  }
+
+  function postSubmission(url, options, timeoutMs) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+    options.signal = controller.signal;
+    return Promise.resolve().then(function () {
+      if (!url) throw new Error("Destination non configurée");
+      return fetch(url, options);
+    }).then(function (response) {
+      if (!response.ok) throw new Error("HTTP " + response.status);
+    }).finally(function () { clearTimeout(timer); });
+  }
+
+  function sendSubmission(data) {
+    // Les deux requêtes démarrent une seule fois. Le premier succès libère l'UX,
+    // sans annuler l'autre envoi ni attendre un webhook Make lent ou indisponible.
+    var supabase = postSubmission(CFG.supabaseUrl && CFG.supabaseUrl.replace(/\/$/, "") + "/rest/v1/form_submissions", {
+      method: "POST",
+      keepalive: true,
+      headers: { apikey: CFG.supabaseKey, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify(submissionPayload(data))
+    }, 15000).catch(function (error) {
+      console.error("[FS] Échec de l'enregistrement Supabase :", error);
+      throw error;
+    });
+    var make = postSubmission(CFG.formEndpoint, {
+      method: "POST", body: data, headers: { Accept: "application/json" }
+    }, 30000).catch(function (error) {
+      console.error("[FS] Échec de l'envoi Make :", error);
+      throw error;
+    });
+    return Promise.any([supabase, make]);
+  }
+
   function initForm() {
     /* Formulaire en une seule étape */
     var form = $("#estimate-form");
     if (!form) return;
     var brand = $("#brand"), model = $("#model"), datalist = $("#model-list");
     var warn = $("[data-model-warning]");
-    var started = false;
+    var started = false, submitting = false, submitted = false;
 
     /* -- UTM / fbclid -- */
     var qs = new URLSearchParams(location.search);
@@ -195,42 +242,28 @@
     /* -- Envoi -- */
     form.addEventListener("submit", function (e) {
       e.preventDefault();
+      if (submitting || submitted) return;
       if (!validateStep(form)) return;
       if (form.elements.website.value) return; /* honeypot */
+      submitting = true;
 
       var btn = $("[data-submit]", form), errBox = $("[data-form-error]", form);
       errBox.hidden = true;
       btn.classList.add("is-loading"); btn.setAttribute("aria-busy", "true");
 
       var data = new FormData(form);
-      data.delete("photos");
       btn.disabled = true;
-
-      var request = Promise.resolve([]).then(function (files) {
-        if (files.length) {
-          var payload = JSON.stringify(files);
-          if (payload.length > 4_700_000) throw new Error("photos-too-large");
-          data.append("vehicle_photos", payload);
-        }
-        if (!CFG.formEndpoint) return;
-        return fetch(CFG.formEndpoint, { method: "POST", body: data, headers: { Accept: "application/json" } })
-          .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); });
-      });
+      var request = sendSubmission(data);
 
       request.then(function () {
+        submitted = true;
         track("Lead", { content_name: brand.value + " " + model.value, content_category: "Estimation vendeur" });
         showSuccess(form.elements.prenom.value.trim());
-      }).catch(function (error) {
-        if (error.message === "photos-too-large" || error.message === "photo-format") {
-          errBox.textContent = error.message === "photos-too-large"
-            ? "Les fichiers dépassent la taille d’envoi. Retirez un fichier ou choisissez une version plus légère."
-            : "Une image n’a pas pu être lue. Remplacez-la par un fichier JPEG ou PNG.";
-          errBox.hidden = false;
-          return;
-        }
+      }).catch(function () {
         errBox.innerHTML = 'Oups, l\'envoi n\'a pas abouti. Réessayez ou appelez-nous au <a href="tel:+33659678703">06 59 67 87 03</a>.';
         errBox.hidden = false;
       }).finally(function () {
+        submitting = false;
         btn.disabled = false;
         btn.classList.remove("is-loading"); btn.removeAttribute("aria-busy");
       });
@@ -610,3 +643,4 @@
     initSticky();
   });
 })();
+
